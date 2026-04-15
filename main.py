@@ -1,10 +1,11 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 """
-API Mock Server v2.2 - 本地大模型接口模拟服务器
-包含12项增强功能：API Key验证、日志搜索、日志限制、配置持久化、
-Token可配置、多消息支持、系统托盘、深色主题、统计面板、
-日志持久化、多端口并发、真实接口转发（分离OpenAI/Anthropic上游配置）
+API Mock Server v3.0 - 本地大模型接口模拟服务器
+GUI 使用 CustomTkinter 现代化框架
+包含功能：API Key验证、日志搜索、日志限制、配置持久化、
+Token可配置、多消息支持、深色主题、统计面板、
+日志持久化、多端口并发、真实接口转发
 """
 
 import os
@@ -17,7 +18,8 @@ import math
 import random
 import threading
 import tkinter as tk
-from tkinter import ttk, messagebox, scrolledtext, filedialog
+from tkinter import ttk, messagebox, filedialog
+import customtkinter as ctk
 from datetime import datetime
 from collections import defaultdict
 
@@ -630,15 +632,19 @@ def run_server(port=12312):
 class MockServerGUI:
     def __init__(self, root):
         self.root = root
-        self.root.title("API Mock Server v2.2 - 本地接口模拟器")
-        self.root.geometry("1300x850")
-        self.root.minsize(1000, 700)
+        self.root.title("API Mock Server v3.0 - 本地接口模拟器")
+        self.root.geometry("1350x900")
+        self.root.minsize(1100, 750)
+
+        # CustomTkinter 主题
+        ctk.set_appearance_mode("Dark" if Config.dark_mode else "Light")
+        ctk.set_default_color_theme("blue")
 
         self.style = ttk.Style()
+        self.style.theme_use('clam')
         self.tray_icon = None
         self._closing = False
 
-        self._setup_theme()
         self._build_ui()
 
         self.start_server()
@@ -646,35 +652,33 @@ class MockServerGUI:
 
         self.root.protocol("WM_DELETE_WINDOW", self.on_close)
 
-    def _setup_theme(self):
-        """设置主题"""
-        if Config.dark_mode:
-            self.style.theme_use('alt')
-            self.style.configure('.', background='#2b2b2b', foreground='#ffffff',
-                                fieldbackground='#3c3c3c')
-            self.style.configure('TLabel', background='#2b2b2b', foreground='#ffffff')
-            self.style.configure('TFrame', background='#2b2b2b')
-            self.style.configure('TLabelframe', background='#2b2b2b', foreground='#ffffff')
-            self.style.configure('TLabelframe.Label', foreground='#ffffff')
-            self.style.configure('TButton', background='#4a4a4a', foreground='#ffffff')
-            self.style.configure('Treeview', background='#3c3c3c', foreground='#ffffff',
-                                fieldbackground='#3c3c3c')
-            self.style.configure('Treeview.Heading', background='#4a4a4a', foreground='#ffffff')
-            self.style.configure('TNotebook', background='#2b2b2b')
-            self.style.configure('TNotebook.Tab', background='#3c3c3c', foreground='#ffffff')
-            self.style.map('TNotebook.Tab', background=[('selected', '#5a5a5a')])
-        else:
-            self.style.theme_use('clam')
+    def _apply_ttk_theme_colors(self):
+        """同步 Treeview 颜色以匹配 CTk 主题"""
+        dark = Config.dark_mode
+        self.style.configure('Treeview',
+            background='#2b2b2b' if dark else '#f5f5f5',
+            foreground='#ffffff' if dark else '#000000',
+            fieldbackground='#2b2b2b' if dark else '#f5f5f5',
+            borderwidth=0)
+        self.style.configure('Treeview.Heading',
+            background='#3a3a3a' if dark else '#e0e0e0',
+            foreground='#ffffff' if dark else '#000000',
+            relief='flat')
+        self.style.map('Treeview.Heading',
+            background=[('active', '#4a4a4a' if dark else '#d0d0d0')])
+        self.style.configure('TScrollbar',
+            background='#3a3a3a' if dark else '#c0c0c0')
 
     def _build_ui(self):
-        """构建UI"""
-        self.paned = ttk.PanedWindow(self.root, orient=tk.HORIZONTAL)
-        self.paned.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
+        self._apply_ttk_theme_colors()
 
-        self.left_frame = ttk.Frame(self.paned)
+        self.paned = ttk.PanedWindow(self.root, orient=tk.HORIZONTAL)
+        self.paned.pack(fill=tk.BOTH, expand=True, padx=8, pady=8)
+
+        self.left_frame = ctk.CTkFrame(self.paned, fg_color='transparent')
         self.paned.add(self.left_frame, weight=2)
 
-        self.right_frame = ttk.Frame(self.paned)
+        self.right_frame = ctk.CTkFrame(self.paned, fg_color='transparent')
         self.paned.add(self.right_frame, weight=1)
 
         self.create_left_panel()
@@ -682,43 +686,52 @@ class MockServerGUI:
 
     def create_left_panel(self):
         # 顶部控制栏
-        control_frame = ttk.Frame(self.left_frame)
+        control_frame = ctk.CTkFrame(self.left_frame, fg_color='transparent')
         control_frame.pack(fill='x')
 
-        title_label = ttk.Label(control_frame, text="API Mock Server v2.2", font=('Microsoft YaHei', 14, 'bold'))
+        title_label = ctk.CTkLabel(control_frame, text="API Mock Server v3.0",
+            font=('Microsoft YaHei', 16, 'bold'))
         title_label.pack(side='left')
 
         self.status_var = tk.StringVar(value="● 运行中")
-        ttk.Label(control_frame, textvariable=self.status_var, foreground='green', font=('Microsoft YaHei', 10)).pack(side='left', padx=15)
+        ctk.CTkLabel(control_frame, textvariable=self.status_var,
+            text_color='#4CAF50', font=('Microsoft YaHei', 10)).pack(side='left', padx=15)
 
         self.log_count_var = tk.StringVar(value="请求数: 0")
-        ttk.Label(control_frame, textvariable=self.log_count_var, font=('Microsoft YaHei', 10)).pack(side='left', padx=5)
+        ctk.CTkLabel(control_frame, textvariable=self.log_count_var,
+            font=('Microsoft YaHei', 10)).pack(side='left', padx=5)
 
-        # 主题切换
-        theme_text = "深色" if not Config.dark_mode else "浅色"
-        ttk.Button(control_frame, text=f"切换{theme_text}主题", command=self.toggle_theme).pack(side='right', padx=3)
+        # 主题切换按钮
+        theme_text = "浅色" if Config.dark_mode else "深色"
+        self.theme_button = ctk.CTkButton(control_frame, text=f"{theme_text}主题",
+            command=self.toggle_theme, width=80)
+        self.theme_button.pack(side='right', padx=3)
 
-        btn_frame = ttk.Frame(control_frame)
+        btn_frame = ctk.CTkFrame(control_frame, fg_color='transparent')
         btn_frame.pack(side='right')
-        ttk.Button(btn_frame, text="刷新日志", command=self.refresh_logs).pack(side='left', padx=3)
-        ttk.Button(btn_frame, text="清空日志", command=self.on_clear).pack(side='left', padx=3)
-        ttk.Button(btn_frame, text="导出JSON", command=self.export_json).pack(side='left', padx=3)
-        ttk.Button(btn_frame, text="导出CSV", command=self.export_csv).pack(side='left', padx=3)
+        ctk.CTkButton(btn_frame, text="刷新日志", command=self.refresh_logs, width=80).pack(side='left', padx=2)
+        ctk.CTkButton(btn_frame, text="清空日志", command=self.on_clear, width=80).pack(side='left', padx=2)
+        ctk.CTkButton(btn_frame, text="导出JSON", command=self.export_json, width=80).pack(side='left', padx=2)
+        ctk.CTkButton(btn_frame, text="导出CSV", command=self.export_csv, width=80).pack(side='left', padx=2)
 
         # API信息
         self.create_info_panel()
 
-        ttk.Separator(self.left_frame, orient='horizontal').pack(fill='x', pady=8)
+        # 分隔线
+        ctk.CTkFrame(self.left_frame, height=2, fg_color=('gray20', 'gray80')).pack(fill='x', pady=10)
 
         # 日志列表 + 搜索
         self.create_log_panel()
 
-        # 详情面板 / 统计 Notebook
-        self.create_bottom_notebook()
+        # 详情面板 / 统计
+        self.create_bottom_tabs()
 
     def create_info_panel(self):
-        info_frame = ttk.LabelFrame(self.left_frame, text="接口信息", padding="5")
+        info_frame = ctk.CTkFrame(self.left_frame, corner_radius=10)
         info_frame.pack(fill='x', pady=(5, 0))
+
+        ctk.CTkLabel(info_frame, text="接口信息", font=('Microsoft YaHei', 11, 'bold')).pack(
+            anchor='w', padx=12, pady=(8, 4))
 
         entries = [
             ("OpenAI 接口:", f"http://localhost:{Config.port}/openai/v1/chat/completions"),
@@ -728,24 +741,24 @@ class MockServerGUI:
         ]
 
         for label_text, value in entries:
-            row = ttk.Frame(info_frame)
-            row.pack(fill='x', pady=2)
+            row = ctk.CTkFrame(info_frame, fg_color='transparent')
+            row.pack(fill='x', padx=10, pady=2)
 
-            ttk.Label(row, text=label_text, width=14, font=('Microsoft YaHei', 9)).pack(side='left')
-            entry = ttk.Entry(row, font=('Consolas', 9))
+            ctk.CTkLabel(row, text=label_text, width=110, anchor='w',
+                font=('Microsoft YaHei', 9)).pack(side='left')
+            entry = ctk.CTkEntry(row, width=400, font=('Consolas', 9))
             entry.insert(0, value)
-            entry.config(state='readonly')
+            entry.configure(state='readonly')
             entry.pack(side='left', fill='x', expand=True, padx=(0, 5))
-            ttk.Button(row, text="复制", width=6, command=lambda e=entry: self.copy_entry(e)).pack(side='left')
+            ctk.CTkButton(row, text="复制", width=50, command=lambda e=entry: self.copy_entry(e)).pack(side='left')
 
-        curl_frame = ttk.Frame(info_frame)
-        curl_frame.pack(fill='x', pady=(5, 0))
-        ttk.Label(curl_frame, text="调用示例:", font=('Microsoft YaHei', 9, 'bold')).pack(anchor='w')
+        ctk.CTkLabel(info_frame, text="调用示例:", font=('Microsoft YaHei', 9, 'bold')).pack(
+            anchor='w', padx=12, pady=(8, 2))
 
-        self.curl_text = scrolledtext.ScrolledText(curl_frame, wrap=tk.WORD, height=4, font=('Consolas', 8))
-        self.curl_text.pack(fill='x', pady=(2, 0))
+        self.curl_text = ctk.CTkTextbox(info_frame, height=80, font=('Consolas', 8))
+        self.curl_text.pack(fill='x', padx=10, pady=(0, 8))
         self._update_curl_text()
-        self.curl_text.config(state='disabled')
+        self.curl_text.configure(state='disabled')
 
     def _update_curl_text(self):
         curl = (
@@ -754,10 +767,10 @@ class MockServerGUI:
             f'  -H "Authorization: Bearer {Config.api_key}" \\\n'
             f'  -d \'{{"model": "gpt-4", "messages": [{{"role": "user", "content": "hello"}}]}}\''
         )
-        self.curl_text.config(state='normal')
+        self.curl_text.configure(state='normal')
         self.curl_text.delete(1.0, tk.END)
         self.curl_text.insert(tk.END, curl)
-        self.curl_text.config(state='disabled')
+        self.curl_text.configure(state='disabled')
 
     def copy_entry(self, entry):
         self.root.clipboard_clear()
@@ -765,84 +778,88 @@ class MockServerGUI:
         self.root.update()
 
     def create_log_panel(self):
-        log_frame = ttk.LabelFrame(self.left_frame, text="请求日志", padding="5")
+        log_frame = ctk.CTkFrame(self.left_frame, corner_radius=10)
         log_frame.pack(fill='both', expand=True)
 
         # 搜索栏
-        search_frame = ttk.Frame(log_frame)
-        search_frame.pack(fill='x', pady=(0, 5))
+        search_frame = ctk.CTkFrame(log_frame, fg_color='transparent')
+        search_frame.pack(fill='x', pady=(8, 5), padx=8)
 
-        ttk.Label(search_frame, text="搜索:").pack(side='left')
+        ctk.CTkLabel(search_frame, text="搜索:", font=('Microsoft YaHei', 9)).pack(side='left')
         self.search_var = tk.StringVar()
-        search_entry = ttk.Entry(search_frame, textvariable=self.search_var, width=30, font=('Consolas', 9))
+        search_entry = ctk.CTkEntry(search_frame, textvariable=self.search_var,
+            width=200, placeholder_text="输入关键词...", font=('Consolas', 9))
         search_entry.pack(side='left', padx=5)
         search_entry.bind('<Return>', lambda e: self.search_logs())
-        ttk.Button(search_frame, text="搜索", command=self.search_logs).pack(side='left', padx=2)
-        ttk.Button(search_frame, text="清除", command=self.clear_search).pack(side='left', padx=2)
+        ctk.CTkButton(search_frame, text="搜索", command=self.search_logs, width=50).pack(side='left', padx=2)
+        ctk.CTkButton(search_frame, text="清除", command=self.clear_search, width=50).pack(side='left', padx=2)
 
-        self.search_hint = ttk.Label(search_frame, text="", foreground='#888', font=('Microsoft YaHei', 8))
+        self.search_hint = ctk.CTkLabel(search_frame, text="", text_color='gray', font=('Microsoft YaHei', 8))
         self.search_hint.pack(side='right')
 
-        # 日志Treeview
+        # 日志Treeview (保留 ttk)
+        tree_container = ctk.CTkFrame(log_frame, fg_color='transparent')
+        tree_container.pack(fill='both', expand=True, padx=8, pady=(0, 8))
+
         columns = ('时间', '类型', '模式', '模型', '客户端IP', 'User-Agent', '路径', '状态')
-        self.tree = ttk.Treeview(log_frame, columns=columns, show='headings', height=8)
+        self.tree = ttk.Treeview(tree_container, columns=columns, show='headings', height=8)
 
         col_widths = {'时间': 125, '类型': 60, '模式': 50, '模型': 110, '客户端IP': 95, 'User-Agent': 180, '路径': 150, '状态': 50}
         for col in columns:
             self.tree.heading(col, text=col)
             self.tree.column(col, width=col_widths.get(col, 100), minwidth=50)
 
-        scrollbar = ttk.Scrollbar(log_frame, orient=tk.VERTICAL, command=self.tree.yview)
+        scrollbar = ttk.Scrollbar(tree_container, orient=tk.VERTICAL, command=self.tree.yview)
         self.tree.configure(yscrollcommand=scrollbar.set)
         self.tree.pack(side='left', fill='both', expand=True)
         scrollbar.pack(side='right', fill='y')
 
         self.tree.bind('<<TreeviewSelect>>', self.on_log_select)
 
-    def create_bottom_notebook(self):
-        detail_frame = ttk.LabelFrame(self.left_frame, text="详情 / 统计", padding="5")
+    def create_bottom_tabs(self):
+        detail_frame = ctk.CTkFrame(self.left_frame, corner_radius=10)
         detail_frame.pack(fill='both', expand=True, pady=(5, 0))
 
-        self.notebook = ttk.Notebook(detail_frame)
-        self.notebook.pack(fill='both', expand=True)
+        # 使用 CTkTabview
+        self.tabview = ctk.CTkTabview(detail_frame)
+        self.tabview.pack(fill='both', expand=True, padx=5, pady=5)
 
         # Headers 页
-        headers_frame = ttk.Frame(self.notebook)
-        self.headers_text = scrolledtext.ScrolledText(headers_frame, wrap=tk.WORD, height=5, font=('Consolas', 9))
-        self.headers_text.pack(fill='both', expand=True, padx=5, pady=5)
-        self.notebook.add(headers_frame, text='请求 Headers')
+        headers_frame = self.tabview.add('请求 Headers')
+        self.headers_text = ctk.CTkTextbox(headers_frame, font=('Consolas', 9))
+        self.headers_text.pack(fill='both', expand=True, padx=8, pady=8)
 
         # Body 页
-        body_frame = ttk.Frame(self.notebook)
-        self.body_text = scrolledtext.ScrolledText(body_frame, wrap=tk.WORD, height=5, font=('Consolas', 9))
-        self.body_text.pack(fill='both', expand=True, padx=5, pady=5)
-        self.notebook.add(body_frame, text='请求 Body')
+        body_frame = self.tabview.add('请求 Body')
+        self.body_text = ctk.CTkTextbox(body_frame, font=('Consolas', 9))
+        self.body_text.pack(fill='both', expand=True, padx=8, pady=8)
 
         # 统计页
-        self.stats_frame = ttk.Frame(self.notebook)
-        self.notebook.add(self.stats_frame, text='统计面板')
-        self._create_stats_ui()
+        stats_frame = self.tabview.add('统计面板')
+        self._create_stats_ui(stats_frame)
 
-    def _create_stats_ui(self):
-        """创建统计面板"""
+    def _create_stats_ui(self, parent):
+        self.stats_frame = parent
         # 统计信息标签
         stats_labels = ['总请求数', 'OpenAI请求', 'Anthropic请求', '错误数', '成功率', 'RPM(近1分钟)', '平均间隔(秒)']
         self.stat_vars = {}
         for i, label in enumerate(stats_labels):
-            row = ttk.Frame(self.stats_frame)
-            row.pack(fill='x', pady=2)
-            ttk.Label(row, text=f"{label}:", width=18, font=('Microsoft YaHei', 9)).pack(side='left')
+            row = ctk.CTkFrame(self.stats_frame, fg_color='transparent')
+            row.pack(fill='x', pady=2, padx=8)
+            ctk.CTkLabel(row, text=f"{label}:", width=130, anchor='w',
+                font=('Microsoft YaHei', 9)).pack(side='left')
             var = tk.StringVar(value="0")
             self.stat_vars[label] = var
-            ttk.Label(row, textvariable=var, font=('Consolas', 10)).pack(side='left')
+            ctk.CTkLabel(row, textvariable=var, font=('Consolas', 10, 'bold')).pack(side='left')
 
         # 模型调用次数 Canvas
-        ttk.Label(self.stats_frame, text="模型调用次数:", font=('Microsoft YaHei', 9, 'bold')).pack(anchor='w', pady=(10, 5))
-        self.stats_canvas = tk.Canvas(self.stats_frame, height=150, bg='#f0f0f0' if not Config.dark_mode else '#3c3c3c')
-        self.stats_canvas.pack(fill='x', padx=5, pady=5)
+        ctk.CTkLabel(self.stats_frame, text="模型调用次数:", font=('Microsoft YaHei', 9, 'bold')).pack(
+            anchor='w', padx=8, pady=(10, 5))
+        self.stats_canvas = tk.Canvas(self.stats_frame, height=150,
+            bg='#2b2b2b' if Config.dark_mode else '#f5f5f5')
+        self.stats_canvas.pack(fill='x', padx=8, pady=5)
 
     def update_stats_ui(self):
-        """刷新统计UI"""
         stats = get_stats()
         self.stat_vars['总请求数'].set(str(stats['total']))
         self.stat_vars['OpenAI请求'].set(str(stats['openai']))
@@ -851,8 +868,6 @@ class MockServerGUI:
         self.stat_vars['成功率'].set(f"{stats['success_rate']}%")
         self.stat_vars['RPM(近1分钟)'].set(str(stats['rpm']))
         self.stat_vars['平均间隔(秒)'].set(str(stats['avg_interval']))
-
-        # 绘制柱状图
         self._draw_bar_chart(stats['models'])
 
     def _draw_bar_chart(self, models):
@@ -868,8 +883,11 @@ class MockServerGUI:
         total_width = len(models) * (bar_width + gap)
         start_x = (canvas_width - total_width) // 2
 
-        bg_color = '#f0f0f0' if not Config.dark_mode else '#3c3c3c'
-        text_color = '#000000' if not Config.dark_mode else '#ffffff'
+        dark = Config.dark_mode
+        bg_color = '#2b2b2b' if dark else '#f5f5f5'
+        text_color = '#ffffff' if dark else '#000000'
+
+        self.stats_canvas.create_rectangle(0, 0, canvas_width, canvas_height, fill=bg_color, outline='')
 
         for i, (model, count) in enumerate(models.items()):
             x = start_x + i * (bar_width + gap)
@@ -877,8 +895,10 @@ class MockServerGUI:
             y = canvas_height - 20 - bar_height
 
             self.stats_canvas.create_rectangle(x, y, x + bar_width, canvas_height - 20, fill='#4a90d9', outline='')
-            self.stats_canvas.create_text(x + bar_width // 2, canvas_height - 8, text=model[:8], fill=text_color, font=('Microsoft YaHei', 7))
-            self.stats_canvas.create_text(x + bar_width // 2, y - 5, text=str(count), fill=text_color, font=('Consolas', 8, 'bold'))
+            self.stats_canvas.create_text(x + bar_width // 2, canvas_height - 8,
+                text=model[:8], fill=text_color, font=('Microsoft YaHei', 7))
+            self.stats_canvas.create_text(x + bar_width // 2, y - 5,
+                text=str(count), fill=text_color, font=('Consolas', 8, 'bold'))
 
     def search_logs(self):
         keyword = self.search_var.get().strip().lower()
@@ -906,175 +926,220 @@ class MockServerGUI:
                 log.get('status', '200')
             ), tags=(log.get('id', ''),))
 
-        self.search_hint.config(text=f"找到 {len(filtered)} 条")
+        self.search_hint.configure(text=f"找到 {len(filtered)} 条")
 
     def clear_search(self):
         self.search_var.set('')
-        self.search_hint.config(text='')
+        self.search_hint.configure(text='')
         self.refresh_logs()
 
     def create_right_panel(self):
-        config_frame = ttk.Frame(self.right_frame, padding="5")
+        config_frame = ctk.CTkFrame(self.right_frame, fg_color='transparent')
         config_frame.pack(fill='both', expand=True)
 
         # ====== 服务器配置 ======
-        server_frame = ttk.LabelFrame(config_frame, text="服务器配置", padding="8")
+        server_frame = ctk.CTkFrame(config_frame, corner_radius=10)
         server_frame.pack(fill='x', pady=(0, 10))
 
-        ttk.Label(server_frame, text="监听端口:").pack(anchor='w')
-        self.port_var = tk.StringVar(value=str(Config.port))
-        ttk.Entry(server_frame, textvariable=self.port_var, width=15, font=('Consolas', 10)).pack(anchor='w', pady=(2, 5))
+        ctk.CTkLabel(server_frame, text="服务器配置", font=('Microsoft YaHei', 11, 'bold')).pack(
+            anchor='w', padx=12, pady=(8, 4))
 
-        ttk.Label(server_frame, text="API Key:").pack(anchor='w')
+        ctk.CTkLabel(server_frame, text="监听端口:", font=('Microsoft YaHei', 9)).pack(anchor='w', padx=12)
+        self.port_var = tk.StringVar(value=str(Config.port))
+        ctk.CTkEntry(server_frame, textvariable=self.port_var, width=120,
+            font=('Consolas', 10)).pack(anchor='w', padx=12, pady=(2, 5))
+
+        ctk.CTkLabel(server_frame, text="API Key:", font=('Microsoft YaHei', 9)).pack(anchor='w', padx=12)
         self.api_key_var = tk.StringVar(value=Config.api_key)
-        ttk.Entry(server_frame, textvariable=self.api_key_var, width=35, font=('Consolas', 9)).pack(anchor='w', pady=(2, 5))
+        ctk.CTkEntry(server_frame, textvariable=self.api_key_var, width=300,
+            font=('Consolas', 9)).pack(anchor='w', padx=12, pady=(2, 5))
 
         self.auth_var = tk.BooleanVar(value=Config.enable_auth)
-        ttk.Checkbutton(server_frame, text="启用API Key验证", variable=self.auth_var).pack(anchor='w', pady=(2, 5))
+        ctk.CTkSwitch(server_frame, text="启用API Key验证", variable=self.auth_var,
+            font=('Microsoft YaHei', 9)).pack(anchor='w', padx=12, pady=(2, 2))
 
         self.multi_turn_var = tk.BooleanVar(value=Config.enable_multi_turn)
-        ttk.Checkbutton(server_frame, text="启用消息轮次响应", variable=self.multi_turn_var).pack(anchor='w', pady=(2, 5))
+        ctk.CTkSwitch(server_frame, text="启用消息轮次响应", variable=self.multi_turn_var,
+            font=('Microsoft YaHei', 9)).pack(anchor='w', padx=12, pady=(2, 2))
 
         self.log_persist_var = tk.BooleanVar(value=Config.enable_log_persistence)
-        ttk.Checkbutton(server_frame, text="启用日志持久化(写入文件)", variable=self.log_persist_var).pack(anchor='w', pady=(2, 5))
+        ctk.CTkSwitch(server_frame, text="启用日志持久化", variable=self.log_persist_var,
+            font=('Microsoft YaHei', 9)).pack(anchor='w', padx=12, pady=(2, 5))
 
-        ttk.Label(server_frame, text="最大日志数:").pack(anchor='w')
+        ctk.CTkLabel(server_frame, text="最大日志数:", font=('Microsoft YaHei', 9)).pack(anchor='w', padx=12)
         self.max_logs_var = tk.IntVar(value=Config.max_logs)
-        ttk.Spinbox(server_frame, from_=100, to=10000, increment=100, textvariable=self.max_logs_var, width=12, font=('Consolas', 10)).pack(anchor='w', pady=(2, 5))
+        ttk.Spinbox(server_frame, from_=100, to=10000, increment=100,
+            textvariable=self.max_logs_var, width=12, font=('Consolas', 10)).pack(anchor='w', padx=12, pady=(2, 8))
 
-        ttk.Button(server_frame, text="重启服务器", command=self.restart_server).pack(anchor='w', pady=(5, 0))
+        ctk.CTkButton(server_frame, text="重启服务器", command=self.restart_server,
+            width=120, fg_color='#2196F3').pack(anchor='w', padx=12, pady=(0, 8))
 
         # ====== 多端口配置 ======
-        port_frame = ttk.LabelFrame(config_frame, text="额外端口", padding="8")
+        port_frame = ctk.CTkFrame(config_frame, corner_radius=10)
         port_frame.pack(fill='x', pady=(0, 10))
 
-        extra_row = ttk.Frame(port_frame)
-        extra_row.pack(fill='x')
-        self.extra_port_var = tk.StringVar()
-        ttk.Entry(extra_row, textvariable=self.extra_port_var, width=10, font=('Consolas', 10)).pack(side='left')
-        ttk.Button(extra_row, text="添加", command=self.add_extra_port).pack(side='left', padx=5)
-        ttk.Button(extra_row, text="清除全部", command=self.clear_extra_ports).pack(side='left')
+        ctk.CTkLabel(port_frame, text="额外端口", font=('Microsoft YaHei', 11, 'bold')).pack(
+            anchor='w', padx=12, pady=(8, 4))
 
-        self.extra_ports_listbox = tk.Listbox(port_frame, height=3, font=('Consolas', 9))
-        self.extra_ports_listbox.pack(fill='x', pady=(5, 0))
+        extra_row = ctk.CTkFrame(port_frame, fg_color='transparent')
+        extra_row.pack(fill='x', padx=12, pady=(0, 5))
+        self.extra_port_var = tk.StringVar()
+        ctk.CTkEntry(extra_row, textvariable=self.extra_port_var, width=80,
+            placeholder_text="端口号", font=('Consolas', 10)).pack(side='left')
+        ctk.CTkButton(extra_row, text="添加", command=self.add_extra_port, width=50).pack(side='left', padx=5)
+        ctk.CTkButton(extra_row, text="清除全部", command=self.clear_extra_ports, width=60).pack(side='left')
+
+        self.extra_ports_listbox = tk.Listbox(port_frame, height=3, font=('Consolas', 9),
+            bg='#2b2b2b' if Config.dark_mode else '#ffffff',
+            fg='#ffffff' if Config.dark_mode else '#000000')
+        self.extra_ports_listbox.pack(fill='x', padx=12, pady=(0, 8))
         for p in Config.extra_ports:
             self.extra_ports_listbox.insert(tk.END, str(p))
 
-        # ====== 响应模式 Notebook (tab切换) ======
-        mode_notebook = ttk.Notebook(config_frame)
-        mode_notebook.pack(fill='both', expand=True)
+        # ====== 响应模式 Tabview ======
+        mode_tabview = ctk.CTkTabview(config_frame)
+        mode_tabview.pack(fill='both', expand=True)
 
         # --- Tab 1: 自定义响应 ---
-        mock_tab = ttk.Frame(mode_notebook, padding="5")
-        mode_notebook.add(mock_tab, text="自定义响应")
+        mock_tab = mode_tabview.add("自定义响应")
 
-        ttk.Label(mock_tab, text="OpenAI Thinking:").pack(anchor='w')
-        self.thinking_var = tk.Text(mock_tab, height=2, width=40, font=('Microsoft YaHei', 9))
-        self.thinking_var.pack(fill='x', pady=(2, 5))
+        ctk.CTkLabel(mock_tab, text="OpenAI Thinking:", font=('Microsoft YaHei', 9)).pack(anchor='w', padx=8, pady=(4, 0))
+        self.thinking_var = tk.Text(mock_tab, height=2, width=40, font=('Microsoft YaHei', 9),
+            bg='#2b2b2b' if Config.dark_mode else '#ffffff',
+            fg='#ffffff' if Config.dark_mode else '#000000',
+            insertbackground='#ffffff' if Config.dark_mode else '#000000')
+        self.thinking_var.pack(fill='x', padx=8, pady=(2, 5))
         self.thinking_var.insert(tk.END, Config.response_thinking)
 
-        ttk.Label(mock_tab, text="OpenAI 结论:").pack(anchor='w')
-        self.content_var = tk.Text(mock_tab, height=2, width=40, font=('Microsoft YaHei', 9))
-        self.content_var.pack(fill='x', pady=(2, 5))
+        ctk.CTkLabel(mock_tab, text="OpenAI 结论:", font=('Microsoft YaHei', 9)).pack(anchor='w', padx=8)
+        self.content_var = tk.Text(mock_tab, height=2, width=40, font=('Microsoft YaHei', 9),
+            bg='#2b2b2b' if Config.dark_mode else '#ffffff',
+            fg='#ffffff' if Config.dark_mode else '#000000',
+            insertbackground='#ffffff' if Config.dark_mode else '#000000')
+        self.content_var.pack(fill='x', padx=8, pady=(2, 5))
         self.content_var.insert(tk.END, Config.response_content)
 
-        ttk.Separator(mock_tab, orient='horizontal').pack(fill='x', pady=5)
+        # 分隔线
+        ctk.CTkFrame(mock_tab, height=2, fg_color=('gray20', 'gray80')).pack(fill='x', pady=5)
 
-        ttk.Label(mock_tab, text="Anthropic Thinking:").pack(anchor='w')
-        self.thinking_a_var = tk.Text(mock_tab, height=2, width=40, font=('Microsoft YaHei', 9))
-        self.thinking_a_var.pack(fill='x', pady=(2, 5))
+        ctk.CTkLabel(mock_tab, text="Anthropic Thinking:", font=('Microsoft YaHei', 9)).pack(anchor='w', padx=8)
+        self.thinking_a_var = tk.Text(mock_tab, height=2, width=40, font=('Microsoft YaHei', 9),
+            bg='#2b2b2b' if Config.dark_mode else '#ffffff',
+            fg='#ffffff' if Config.dark_mode else '#000000',
+            insertbackground='#ffffff' if Config.dark_mode else '#000000')
+        self.thinking_a_var.pack(fill='x', padx=8, pady=(2, 5))
         self.thinking_a_var.insert(tk.END, Config.response_thinking_anthropic)
 
-        ttk.Label(mock_tab, text="Anthropic 结论:").pack(anchor='w')
-        self.content_a_var = tk.Text(mock_tab, height=2, width=40, font=('Microsoft YaHei', 9))
-        self.content_a_var.pack(fill='x', pady=(2, 5))
+        ctk.CTkLabel(mock_tab, text="Anthropic 结论:", font=('Microsoft YaHei', 9)).pack(anchor='w', padx=8)
+        self.content_a_var = tk.Text(mock_tab, height=2, width=40, font=('Microsoft YaHei', 9),
+            bg='#2b2b2b' if Config.dark_mode else '#ffffff',
+            fg='#ffffff' if Config.dark_mode else '#000000',
+            insertbackground='#ffffff' if Config.dark_mode else '#000000')
+        self.content_a_var.pack(fill='x', padx=8, pady=(2, 5))
         self.content_a_var.insert(tk.END, Config.response_content_anthropic)
 
-        ttk.Separator(mock_tab, orient='horizontal').pack(fill='x', pady=5)
+        ctk.CTkFrame(mock_tab, height=2, fg_color=('gray20', 'gray80')).pack(fill='x', pady=5)
 
         # Token配置
-        token_row = ttk.Frame(mock_tab)
-        token_row.pack(fill='x', pady=(0, 5))
-        ttk.Label(token_row, text="Prompt Tokens:").pack(side='left')
+        token_row = ctk.CTkFrame(mock_tab, fg_color='transparent')
+        token_row.pack(fill='x', pady=(0, 5), padx=8)
+        ctk.CTkLabel(token_row, text="Prompt Tokens:", font=('Microsoft YaHei', 9)).pack(side='left')
         self.prompt_tokens_var = tk.IntVar(value=Config.prompt_tokens)
-        ttk.Spinbox(token_row, from_=1, to=10000, textvariable=self.prompt_tokens_var, width=8, font=('Consolas', 9)).pack(side='left', padx=5)
-        ttk.Label(token_row, text="Completion Tokens:").pack(side='left', padx=(10, 0))
+        ttk.Spinbox(token_row, from_=1, to=10000, textvariable=self.prompt_tokens_var,
+            width=8, font=('Consolas', 9)).pack(side='left', padx=5)
+        ctk.CTkLabel(token_row, text="Completion Tokens:", font=('Microsoft YaHei', 9)).pack(side='left', padx=(10, 0))
         self.completion_tokens_var = tk.IntVar(value=Config.completion_tokens)
-        ttk.Spinbox(token_row, from_=1, to=10000, textvariable=self.completion_tokens_var, width=8, font=('Consolas', 9)).pack(side='left', padx=5)
+        ttk.Spinbox(token_row, from_=1, to=10000, textvariable=self.completion_tokens_var,
+            width=8, font=('Consolas', 9)).pack(side='left', padx=5)
 
-        ttk.Button(mock_tab, text="应用响应内容", command=self.apply_response_config).pack(anchor='w', pady=(5, 0))
+        ctk.CTkButton(mock_tab, text="应用响应内容", command=self.apply_response_config,
+            width=120).pack(anchor='w', padx=8, pady=(5, 5))
 
         # 延迟模拟
-        delay_frame = ttk.LabelFrame(mock_tab, text="延迟模拟", padding="8")
-        delay_frame.pack(fill='x', pady=(10, 10))
-
-        ttk.Label(delay_frame, text="响应延迟 (秒):").pack(anchor='w')
+        delay_frame = ctk.CTkFrame(mock_tab, corner_radius=10)
+        delay_frame.pack(fill='x', pady=(5, 5), padx=8)
+        ctk.CTkLabel(delay_frame, text="延迟模拟", font=('Microsoft YaHei', 10, 'bold')).pack(
+            anchor='w', padx=10, pady=(6, 2))
+        ctk.CTkLabel(delay_frame, text="响应延迟 (秒):", font=('Microsoft YaHei', 9)).pack(anchor='w', padx=10)
         self.delay_var = tk.DoubleVar(value=Config.response_delay)
-        ttk.Spinbox(delay_frame, from_=0, to=10, increment=0.1, textvariable=self.delay_var, width=12, font=('Consolas', 10)).pack(anchor='w', pady=(2, 5))
+        ttk.Spinbox(delay_frame, from_=0, to=10, increment=0.1, textvariable=self.delay_var,
+            width=12, font=('Consolas', 10)).pack(anchor='w', padx=10, pady=(2, 6))
 
         # 错误注入
-        error_frame = ttk.LabelFrame(mock_tab, text="错误注入", padding="8")
-        error_frame.pack(fill='x', pady=(0, 10))
-
-        ttk.Label(error_frame, text="错误概率 (%):").pack(anchor='w')
+        error_frame = ctk.CTkFrame(mock_tab, corner_radius=10)
+        error_frame.pack(fill='x', pady=(0, 5), padx=8)
+        ctk.CTkLabel(error_frame, text="错误注入", font=('Microsoft YaHei', 10, 'bold')).pack(
+            anchor='w', padx=10, pady=(6, 2))
+        ctk.CTkLabel(error_frame, text="错误概率 (%):", font=('Microsoft YaHei', 9)).pack(anchor='w', padx=10)
         self.error_rate_var = tk.IntVar(value=Config.error_rate)
-        ttk.Spinbox(error_frame, from_=0, to=100, increment=5, textvariable=self.error_rate_var, width=10, font=('Consolas', 10)).pack(anchor='w', pady=(2, 5))
-
-        ttk.Label(error_frame, text="错误状态码:").pack(anchor='w')
+        ttk.Spinbox(error_frame, from_=0, to=100, increment=5, textvariable=self.error_rate_var,
+            width=10, font=('Consolas', 10)).pack(anchor='w', padx=10, pady=(2, 3))
+        ctk.CTkLabel(error_frame, text="错误状态码:", font=('Microsoft YaHei', 9)).pack(anchor='w', padx=10)
         self.error_code_var = tk.IntVar(value=Config.error_code)
-        ttk.Spinbox(error_frame, values=[500, 502, 503, 504], textvariable=self.error_code_var, width=10, font=('Consolas', 10)).pack(anchor='w', pady=(2, 5))
-
-        ttk.Label(error_frame, text="错误信息:").pack(anchor='w')
+        ttk.Spinbox(error_frame, values=[500, 502, 503, 504], textvariable=self.error_code_var,
+            width=10, font=('Consolas', 10)).pack(anchor='w', padx=10, pady=(2, 3))
+        ctk.CTkLabel(error_frame, text="错误信息:", font=('Microsoft YaHei', 9)).pack(anchor='w', padx=10)
         self.error_msg_var = tk.StringVar(value=Config.error_message)
-        ttk.Entry(error_frame, textvariable=self.error_msg_var, width=35, font=('Consolas', 9)).pack(anchor='w', pady=(2, 5))
-
-        ttk.Button(error_frame, text="应用延迟和错误配置", command=self.apply_error_config).pack(anchor='w', pady=(5, 0))
+        ctk.CTkEntry(error_frame, textvariable=self.error_msg_var, width=300,
+            font=('Consolas', 9)).pack(anchor='w', padx=10, pady=(2, 6))
+        ctk.CTkButton(error_frame, text="应用延迟和错误配置", command=self.apply_error_config,
+            width=150).pack(anchor='w', padx=10, pady=(0, 8))
 
         # --- Tab 2: 真实转发 ---
-        forward_tab = ttk.Frame(mode_notebook, padding="5")
-        mode_notebook.add(forward_tab, text="真实转发")
+        forward_tab = mode_tabview.add("真实转发")
 
         self.forward_var = tk.BooleanVar(value=Config.forward_mode)
-        ttk.Checkbutton(forward_tab, text="启用真实接口转发",
-                        variable=self.forward_var).pack(anchor='w', pady=(5, 10))
+        ctk.CTkSwitch(forward_tab, text="启用真实接口转发", variable=self.forward_var,
+            font=('Microsoft YaHei', 10)).pack(anchor='w', padx=12, pady=(8, 10))
 
         # OpenAI 转发
-        openai_fwd = ttk.LabelFrame(forward_tab, text="OpenAI 兼容接口转发", padding="8")
-        openai_fwd.pack(fill='x', pady=(0, 10))
-
-        ttk.Label(openai_fwd, text="Base URL:").pack(anchor='w')
+        openai_fwd = ctk.CTkFrame(forward_tab, corner_radius=10)
+        openai_fwd.pack(fill='x', padx=8, pady=(0, 10))
+        ctk.CTkLabel(openai_fwd, text="OpenAI 兼容接口", font=('Microsoft YaHei', 10, 'bold')).pack(
+            anchor='w', padx=10, pady=(6, 2))
+        ctk.CTkLabel(openai_fwd, text="Base URL:", font=('Microsoft YaHei', 9)).pack(anchor='w', padx=10)
         self.forward_openai_url_var = tk.StringVar(value=Config.forward_openai_url)
-        ttk.Entry(openai_fwd, textvariable=self.forward_openai_url_var, width=45, font=('Consolas', 9)).pack(anchor='w', pady=(2, 5))
-
-        ttk.Label(openai_fwd, text="API Key:").pack(anchor='w')
+        ctk.CTkEntry(openai_fwd, textvariable=self.forward_openai_url_var, width=300,
+            placeholder_text="https://api.openai.com", font=('Consolas', 9)).pack(anchor='w', padx=10, pady=(2, 3))
+        ctk.CTkLabel(openai_fwd, text="API Key:", font=('Microsoft YaHei', 9)).pack(anchor='w', padx=10)
         self.forward_openai_key_var = tk.StringVar(value=Config.forward_openai_key)
-        ttk.Entry(openai_fwd, textvariable=self.forward_openai_key_var, width=45, font=('Consolas', 9), show='*').pack(anchor='w', pady=(2, 5))
+        ctk.CTkEntry(openai_fwd, textvariable=self.forward_openai_key_var, width=300,
+            placeholder_text="sk-...", font=('Consolas', 9), show='*').pack(anchor='w', padx=10, pady=(2, 6))
 
         # Anthropic 转发
-        anthropic_fwd = ttk.LabelFrame(forward_tab, text="Anthropic 兼容接口转发", padding="8")
-        anthropic_fwd.pack(fill='x', pady=(0, 10))
-
-        ttk.Label(anthropic_fwd, text="Base URL:").pack(anchor='w')
+        anthropic_fwd = ctk.CTkFrame(forward_tab, corner_radius=10)
+        anthropic_fwd.pack(fill='x', padx=8, pady=(0, 10))
+        ctk.CTkLabel(anthropic_fwd, text="Anthropic 兼容接口", font=('Microsoft YaHei', 10, 'bold')).pack(
+            anchor='w', padx=10, pady=(6, 2))
+        ctk.CTkLabel(anthropic_fwd, text="Base URL:", font=('Microsoft YaHei', 9)).pack(anchor='w', padx=10)
         self.forward_anthropic_url_var = tk.StringVar(value=Config.forward_anthropic_url)
-        ttk.Entry(anthropic_fwd, textvariable=self.forward_anthropic_url_var, width=45, font=('Consolas', 9)).pack(anchor='w', pady=(2, 5))
-
-        ttk.Label(anthropic_fwd, text="API Key:").pack(anchor='w')
+        ctk.CTkEntry(anthropic_fwd, textvariable=self.forward_anthropic_url_var, width=300,
+            placeholder_text="https://api.anthropic.com", font=('Consolas', 9)).pack(anchor='w', padx=10, pady=(2, 3))
+        ctk.CTkLabel(anthropic_fwd, text="API Key:", font=('Microsoft YaHei', 9)).pack(anchor='w', padx=10)
         self.forward_anthropic_key_var = tk.StringVar(value=Config.forward_anthropic_key)
-        ttk.Entry(anthropic_fwd, textvariable=self.forward_anthropic_key_var, width=45, font=('Consolas', 9), show='*').pack(anchor='w', pady=(2, 5))
+        ctk.CTkEntry(anthropic_fwd, textvariable=self.forward_anthropic_key_var, width=300,
+            placeholder_text="sk-ant-...", font=('Consolas', 9), show='*').pack(anchor='w', padx=10, pady=(2, 6))
 
-        ttk.Label(forward_tab, text="说明: 开启后，OpenAI接口请求转发到OpenAI上游，Anthropic接口请求转发到Anthropic上游",
-                  font=('Microsoft YaHei', 8), foreground='#888', wraplength=350).pack(anchor='w', pady=(5, 10))
+        ctk.CTkLabel(forward_tab, text="OpenAI接口请求转发到OpenAI上游，Anthropic接口请求转发到Anthropic上游",
+            font=('Microsoft YaHei', 8), text_color='gray', wraplength=300).pack(anchor='w', padx=12, pady=(0, 10))
 
-        ttk.Button(forward_tab, text="应用转发配置", command=self.apply_forward_config).pack(anchor='w', pady=(5, 0))
+        ctk.CTkButton(forward_tab, text="应用转发配置", command=self.apply_forward_config,
+            width=120, fg_color='#2196F3').pack(anchor='w', padx=12, pady=(0, 8))
 
     def toggle_theme(self):
-        """切换主题"""
         Config.dark_mode = not Config.dark_mode
-        self._setup_theme()
-        # 重新应用所有样式
-        self.root.update_idletasks()
-        theme_text = "深色" if not Config.dark_mode else "浅色"
-        messagebox.showinfo("提示", f"已切换到{theme_text}主题（部分控件需重启后完全生效）")
+        mode = "Dark" if Config.dark_mode else "Light"
+        ctk.set_appearance_mode(mode)
+        self._apply_ttk_theme_colors()
+        theme_text = "浅色" if Config.dark_mode else "深色"
+        self.theme_button.configure(text=f"{theme_text}主题")
+        # 更新 Listbox 和 Text 颜色
+        bg = '#2b2b2b' if Config.dark_mode else '#ffffff'
+        fg = '#ffffff' if Config.dark_mode else '#000000'
+        self.extra_ports_listbox.configure(bg=bg, fg=fg)
+        self.stats_canvas.configure(bg=bg)
+        for txt in [self.thinking_var, self.content_var, self.thinking_a_var, self.content_a_var]:
+            txt.configure(bg=bg, fg=fg, insertbackground=fg)
 
     def add_extra_port(self):
         try:
@@ -1088,7 +1153,6 @@ class MockServerGUI:
             Config.extra_ports.append(port)
             self.extra_ports_listbox.insert(tk.END, str(port))
             self.extra_port_var.set('')
-            # 启动新端口的服务
             threading.Thread(target=lambda: run_server(port), daemon=True).start()
             messagebox.showinfo("成功", f"已在端口 {port} 启动服务")
         except ValueError:
@@ -1107,8 +1171,6 @@ class MockServerGUI:
                 self.status_var.set("● 启动失败")
 
         threading.Thread(target=run, daemon=True).start()
-
-        # 启动额外端口
         for port in Config.extra_ports:
             threading.Thread(target=lambda p=port: run_server(p), daemon=True).start()
 
@@ -1135,7 +1197,6 @@ class MockServerGUI:
         Config.forward_anthropic_url = self.forward_anthropic_url_var.get().strip()
         Config.forward_anthropic_key = self.forward_anthropic_key_var.get().strip()
         save_config()
-
         self._update_curl_text()
 
         if old_port != new_port:
@@ -1216,10 +1277,12 @@ class MockServerGUI:
             log = next((l for l in logs if l.get('id') == log_id), None)
             if log:
                 headers = log.get('headers', {})
+                self.headers_text.configure(state='normal')
                 self.headers_text.delete(1.0, tk.END)
                 self.headers_text.insert(tk.END, json.dumps(headers, indent=2, ensure_ascii=False))
 
                 body = log.get('body', {})
+                self.body_text.configure(state='normal')
                 self.body_text.delete(1.0, tk.END)
                 self.body_text.insert(tk.END, json.dumps(body, indent=2, ensure_ascii=False))
 
@@ -1270,7 +1333,7 @@ def main():
     # 加载持久化配置
     load_config()
 
-    root = tk.Tk()
+    root = ctk.CTk()
     MockServerGUI(root)
     root.mainloop()
 

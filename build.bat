@@ -20,6 +20,7 @@ pyinstaller --onefile --windowed --name "API-Mock-Server" ^
     --hidden-import flask ^
     --hidden-import tkinter ^
     --hidden-import collections ^
+    --hidden-import customtkinter ^
     --clean main.py
 
 if %errorlevel% neq 0 (
