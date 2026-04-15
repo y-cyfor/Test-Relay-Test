@@ -1,10 +1,10 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 """
-API Mock Server v2.0 - 本地大模型接口模拟服务器
-包含11项增强功能：API Key验证、日志搜索、日志限制、配置持久化、
+API Mock Server v2.1 - 本地大模型接口模拟服务器
+包含12项增强功能：API Key验证、日志搜索、日志限制、配置持久化、
 Token可配置、多消息支持、系统托盘、深色主题、统计面板、
-日志持久化、多端口并发
+日志持久化、多端口并发、真实接口转发
 """
 
 import os
@@ -24,6 +24,80 @@ from collections import defaultdict
 from flask import Flask, request, jsonify, Response
 
 # ============================================================
+# 真实转发 - 使用 urllib 避免新增依赖
+# ============================================================
+
+import urllib.request
+import urllib.error
+import urllib.parse
+from urllib.parse import urljoin
+
+FORWARD_TIMEOUT = 120
+
+
+def forward_request(api_type):
+    """
+    将请求原封不动转发到上游 API
+    api_type: 'openai' 或 'anthropic'
+    返回: (status_code, headers_dict, body_bytes_or_str)
+    """
+    base_url = Config.forward_base_url.rstrip('/')
+    if api_type == 'openai':
+        path = '/v1/chat/completions'
+    else:
+        path = '/v1/messages'
+
+    target_url = urljoin(base_url + '/', path)
+
+    # 构建转发请求
+    body_data = request.get_data()
+    headers = {}
+    for key, value in request.headers:
+        # 跳过 Flask 自动添加的 host
+        if key.lower() in ('host', 'content-length'):
+            continue
+        headers[key] = value
+
+    # 确保上游认证
+    if api_type == 'openai' and Config.forward_api_key:
+        headers['Authorization'] = f'Bearer {Config.forward_api_key}'
+    elif api_type == 'anthropic' and Config.forward_api_key:
+        headers['x-api-key'] = Config.forward_api_key
+        if 'anthropic-version' not in headers:
+            headers['anthropic-version'] = '2023-06-01'
+
+    headers['Content-Type'] = 'application/json'
+    headers['Host'] = urllib.parse.urlparse(target_url).netloc
+
+    req = urllib.request.Request(target_url, data=body_data, headers=headers, method='POST')
+
+    try:
+        with urllib.request.urlopen(req, timeout=FORWARD_TIMEOUT) as resp:
+            resp_body = resp.read()
+            resp_headers = dict(resp.headers)
+            return resp.status, resp_headers, resp_body
+    except urllib.error.HTTPError as e:
+        err_body = e.read()
+        return e.code, dict(e.headers), err_body
+    except urllib.error.URLError as e:
+        return 502, {}, json.dumps({
+            'error': {
+                'message': f'Forward failed: {str(e.reason)}',
+                'type': 'forward_error',
+                'code': 502
+            }
+        }).encode('utf-8')
+    except Exception as e:
+        return 502, {}, json.dumps({
+            'error': {
+                'message': f'Forward timeout or unknown error: {str(e)}',
+                'type': 'forward_error',
+                'code': 502
+            }
+        }).encode('utf-8')
+
+
+# ============================================================
 # 全局配置
 # ============================================================
 
@@ -39,6 +113,11 @@ class Config:
     max_logs = 1000
     enable_log_persistence = False
     enable_multi_turn = False
+
+    # 真实转发配置
+    forward_mode = False
+    forward_base_url = ""
+    forward_api_key = ""
 
     response_thinking = "这是Mock服务器模拟的thinking过程。首先分析用户的问题，然后逐步推理得出结论。整个过程展示了thinking功能的转发是否正常。"
     response_content = "这是一个Mock服务器返回的固定结论内容。你的API中转平台转发功能正常！"
@@ -65,6 +144,9 @@ class Config:
             'max_logs': cls.max_logs,
             'enable_log_persistence': cls.enable_log_persistence,
             'enable_multi_turn': cls.enable_multi_turn,
+            'forward_mode': cls.forward_mode,
+            'forward_base_url': cls.forward_base_url,
+            'forward_api_key': cls.forward_api_key,
             'response_thinking': cls.response_thinking,
             'response_content': cls.response_content,
             'response_thinking_anthropic': cls.response_thinking_anthropic,
@@ -276,9 +358,19 @@ def openai_chat_completions():
         'content_type': request.headers.get('Content-Type', ''),
         'auth_header': request.headers.get('Authorization', '')[:20] + '...' if request.headers.get('Authorization') else '',
         'headers': dict(request.headers), 'body': body,
-        'api_type': 'openai', 'status': 200
+        'api_type': 'openai', 'status': 200,
+        'mode': 'forward' if Config.forward_mode else 'mock'
     }
     add_log(log_entry)
+
+    # 转发模式：真实请求上游
+    if Config.forward_mode:
+        status, resp_headers, resp_body = forward_request('openai')
+        if status >= 500:
+            update_stats('openai', model, is_error=True)
+        else:
+            update_stats('openai', model)
+        return Response(resp_body, status=status, content_type='application/json')
 
     if maybe_inject_error():
         update_stats('openai', model, is_error=True)
@@ -392,9 +484,19 @@ def anthropic_messages():
         'auth_header': request.headers.get('x-api-key', '')[:20] + '...' if request.headers.get('x-api-key') else '',
         'anthropic_version': request.headers.get('anthropic-version', ''),
         'headers': dict(request.headers), 'body': body,
-        'api_type': 'anthropic', 'status': 200
+        'api_type': 'anthropic', 'status': 200,
+        'mode': 'forward' if Config.forward_mode else 'mock'
     }
     add_log(log_entry)
+
+    # 转发模式：真实请求上游
+    if Config.forward_mode:
+        status, resp_headers, resp_body = forward_request('anthropic')
+        if status >= 500:
+            update_stats('anthropic', model, is_error=True)
+        else:
+            update_stats('anthropic', model)
+        return Response(resp_body, status=status, content_type='application/json')
 
     if maybe_inject_error():
         update_stats('anthropic', model, is_error=True)
@@ -664,10 +766,10 @@ class MockServerGUI:
         self.search_hint.pack(side='right')
 
         # 日志Treeview
-        columns = ('时间', '类型', '模型', '客户端IP', 'User-Agent', '路径', '状态')
+        columns = ('时间', '类型', '模式', '模型', '客户端IP', 'User-Agent', '路径', '状态')
         self.tree = ttk.Treeview(log_frame, columns=columns, show='headings', height=8)
 
-        col_widths = {'时间': 130, '类型': 65, '模型': 120, '客户端IP': 100, 'User-Agent': 200, '路径': 160, '状态': 50}
+        col_widths = {'时间': 125, '类型': 60, '模式': 50, '模型': 110, '客户端IP': 95, 'User-Agent': 180, '路径': 150, '状态': 50}
         for col in columns:
             self.tree.heading(col, text=col)
             self.tree.column(col, width=col_widths.get(col, 100), minwidth=50)
@@ -778,9 +880,10 @@ class MockServerGUI:
             self.tree.insert('', 'end', values=(
                 log.get('timestamp', ''),
                 log.get('api_type', '').upper(),
+                log.get('mode', 'mock').upper(),
                 log.get('model', ''),
                 log.get('client_ip', ''),
-                log.get('user_agent', '')[:40],
+                log.get('user_agent', '')[:35],
                 log.get('path', ''),
                 log.get('status', '200')
             ), tags=(log.get('id', ''),))
@@ -822,6 +925,29 @@ class MockServerGUI:
         ttk.Spinbox(server_frame, from_=100, to=10000, increment=100, textvariable=self.max_logs_var, width=12, font=('Consolas', 10)).pack(anchor='w', pady=(2, 5))
 
         ttk.Button(server_frame, text="重启服务器", command=self.restart_server).pack(anchor='w', pady=(5, 0))
+
+        # ====== 真实转发配置 ======
+        forward_frame = ttk.LabelFrame(config_frame, text="真实接口转发", padding="8")
+        forward_frame.pack(fill='x', pady=(0, 10))
+
+        self.forward_var = tk.BooleanVar(value=Config.forward_mode)
+        ttk.Checkbutton(forward_frame, text="启用真实接口转发（关闭则使用内置Mock响应）",
+                        variable=self.forward_var).pack(anchor='w', pady=(0, 5))
+
+        ttk.Label(forward_frame, text="上游 Base URL:").pack(anchor='w')
+        self.forward_url_var = tk.StringVar(value=Config.forward_base_url)
+        url_entry = ttk.Entry(forward_frame, textvariable=self.forward_url_var, width=45, font=('Consolas', 9))
+        url_entry.pack(anchor='w', pady=(2, 5))
+        url_entry.insert(0, "例: https://api.openai.com 或 https://api.anthropic.com")
+
+        ttk.Label(forward_frame, text="上游 API Key:").pack(anchor='w')
+        self.forward_key_var = tk.StringVar(value=Config.forward_api_key)
+        ttk.Entry(forward_frame, textvariable=self.forward_key_var, width=45, font=('Consolas', 9), show='*').pack(anchor='w', pady=(2, 5))
+
+        ttk.Label(forward_frame, text="开启后请求将原封不动转发到上游，响应也原样返回",
+                  font=('Microsoft YaHei', 8), foreground='#888').pack(anchor='w')
+
+        ttk.Button(forward_frame, text="应用转发配置", command=self.apply_forward_config).pack(anchor='w', pady=(5, 0))
 
         # ====== 多端口配置 ======
         port_frame = ttk.LabelFrame(config_frame, text="额外端口", padding="8")
@@ -967,6 +1093,9 @@ class MockServerGUI:
         Config.enable_multi_turn = self.multi_turn_var.get()
         Config.enable_log_persistence = self.log_persist_var.get()
         Config.max_logs = self.max_logs_var.get()
+        Config.forward_mode = self.forward_var.get()
+        Config.forward_base_url = self.forward_url_var.get().strip()
+        Config.forward_api_key = self.forward_key_var.get().strip()
         save_config()
 
         self._update_curl_text()
@@ -995,6 +1124,14 @@ class MockServerGUI:
         save_config()
         messagebox.showinfo("成功", "延迟和错误配置已更新")
 
+    def apply_forward_config(self):
+        Config.forward_mode = self.forward_var.get()
+        Config.forward_base_url = self.forward_url_var.get().strip()
+        Config.forward_api_key = self.forward_key_var.get().strip()
+        save_config()
+        mode_text = "转发模式" if Config.forward_mode else "Mock模式"
+        messagebox.showinfo("成功", f"已切换到 {mode_text}")
+
     def refresh_logs(self):
         try:
             logs = get_logs()
@@ -1007,9 +1144,10 @@ class MockServerGUI:
                 self.tree.insert('', 'end', values=(
                     log.get('timestamp', ''),
                     log.get('api_type', '').upper(),
+                    log.get('mode', 'mock').upper(),
                     log.get('model', ''),
                     log.get('client_ip', ''),
-                    log.get('user_agent', '')[:40],
+                    log.get('user_agent', '')[:35],
                     log.get('path', ''),
                     log.get('status', '200')
                 ), tags=(log.get('id', ''),))
