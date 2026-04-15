@@ -1,6 +1,6 @@
 # API Mock Server
 
-> 本地大模型接口模拟服务器 v2.0 — 用于测试 API 中转平台的请求转发和伪装功能
+> 本地大模型接口模拟服务器 v2.1 — 用于测试 API 中转平台的请求转发和伪装功能
 
 ---
 
@@ -88,6 +88,7 @@ curl -X POST http://localhost:12312/anthropic/v1/messages \
 | API Key 验证 | 开关控制，开启后拒绝无 Key 或 Key 错误的请求（返回 401） |
 | 消息轮次响应 | 开启后根据 messages 数组长度返回对应轮次的拼接响应 |
 | 日志持久化 | 开启后自动将日志追加写入 `logs/YYYYMMDD.jsonl` 文件 |
+| 真实转发 | 开启后将请求原样转发到上游 API，响应也原样返回（Mock/转发模式可切换） |
 | 响应内容 | 编辑 OpenAI/Anthropic 的 thinking 和结论文本，点击"应用"生效 |
 | Token 配置 | 可自定义 prompt_tokens 和 completion_tokens 数值 |
 | 延迟模拟 | 设置 0~10 秒的响应延迟，模拟真实上游 API |
@@ -147,6 +148,11 @@ API-TEST/
 - **打包工具**: PyInstaller 6.x
 - **运行环境**: Python 3.13+
 - **系统托盘**: pystray + Pillow
+
+**v2.1 新增特性：**
+- 真实接口转发（Mock/转发模式一键切换）
+- 请求原样转发到上游 API，响应原样返回
+- 日志新增"模式"列区分 mock/forward
 
 **v2.0 新增特性：**
 - API Key 鉴权验证（支持 OpenAI/Anthropic 两种认证方式）
