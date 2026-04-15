@@ -15,12 +15,12 @@ if %errorlevel% neq 0 (
 echo 依赖安装完成。
 echo.
 
-echo [2/2] 打包为 exe (v2.0)...
-pyinstaller --onefile --windowed --name "API-Mock-Server" ^
-    --hidden-import flask ^
-    --hidden-import tkinter ^
-    --hidden-import collections ^
-    --hidden-import customtkinter ^
+echo [2/2] 打包为 exe (v4.0)...
+pyinstaller --onefile --name "API-Mock-Server" ^
+    --hidden-import fastapi ^
+    --hidden-import uvicorn ^
+    --hidden-import nicegui ^
+    --hidden-import urllib ^
     --clean main.py
 
 if %errorlevel% neq 0 (

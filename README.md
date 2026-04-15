@@ -1,6 +1,6 @@
 # API Mock Server
 
-> 本地大模型接口模拟服务器 v2.1 — 用于测试 API 中转平台的请求转发和伪装功能
+> 本地大模型接口模拟服务器 v4.0 — 用于测试 API 中转平台的请求转发和伪装功能
 
 ---
 
@@ -27,6 +27,8 @@
 - **OpenAI 格式** — 模拟 `gpt-4` 等模型的响应
 - **Anthropic 格式** — 模拟 `claude` 系列模型的响应（含 thinking 块）
 
+v4.0 采用 **FastAPI + NiceGUI** 技术栈，双击 exe 后自动打开浏览器，提供现代化的 Web 管理界面。
+
 ---
 
 ## 安装与使用
@@ -34,7 +36,7 @@
 ### 方式一：直接使用打包好的 exe（推荐）
 
 1. 双击运行 `dist/API-Mock-Server.exe`
-2. 程序会自动启动 HTTP 服务和图形界面
+2. 程序会自动启动 HTTP 服务并打开浏览器
 3. 默认监听地址：`http://localhost:12312`
 
 ### 方式二：从源码运行
@@ -77,26 +79,17 @@ curl -X POST http://localhost:12312/anthropic/v1/messages \
 
 ### GUI 功能说明
 
-| 功能区域 | 说明 |
-|----------|------|
-| 接口信息面板 | 显示接口地址和 API Key，每行附带"复制"按钮 |
-| 请求日志列表 | 自动刷新（每2秒），显示时间、类型、模型、客户端IP、UA、路径、状态码 |
-| 日志搜索 | 支持按关键词搜索过滤日志，实时显示匹配数量 |
-| 请求详情 | 选中某条日志后，在下方展示完整的 Headers 和 Body |
-| 统计面板 | 显示总请求数、成功率、RPM、模型调用次数柱状图 |
-| 服务器配置 | 修改监听端口、API Key、最大日志数，点击"重启服务器"生效 |
-| API Key 验证 | 开关控制，开启后拒绝无 Key 或 Key 错误的请求（返回 401） |
-| 消息轮次响应 | 开启后根据 messages 数组长度返回对应轮次的拼接响应 |
-| 日志持久化 | 开启后自动将日志追加写入 `logs/YYYYMMDD.jsonl` 文件 |
-| 真实转发 | 开启后将请求原样转发到上游 API，响应也原样返回（Mock/转发模式可切换） |
-| 响应内容 | 编辑 OpenAI/Anthropic 的 thinking 和结论文本，点击"应用"生效 |
-| Token 配置 | 可自定义 prompt_tokens 和 completion_tokens 数值 |
-| 延迟模拟 | 设置 0~10 秒的响应延迟，模拟真实上游 API |
-| 错误注入 | 配置 0%~100% 的错误概率和状态码，测试中转平台的错误处理 |
-| 额外端口 | 支持添加多个额外监听端口，每个端口独立运行 |
-| 日志导出 | 支持导出为 JSON 或 CSV 文件 |
-| 主题切换 | 支持深色/浅色主题一键切换 |
-| 配置持久化 | 所有配置自动保存到 `config.json`，重启后自动恢复 |
+双击 exe 后自动打开浏览器，访问 Web 管理界面。支持以下页面：
+
+| 页面 | 说明 |
+|------|------|
+| 📊 仪表盘 | 总请求数、成功率、RPM、模型调用柱状图、最近请求表格 |
+| 📝 日志详情 | 完整日志表格、搜索过滤、请求详情展开、导出 JSON/CSV |
+| ⚙️ 服务器配置 | 端口、API Key、认证开关、响应内容编辑、延迟/错误注入、转发配置 |
+| 🔌 端口管理 | 添加/删除额外监听端口 |
+| ℹ️ 接口信息 | 接口地址展示、复制按钮、curl 调用示例 |
+
+顶部栏支持深色/浅色主题一键切换。
 
 ---
 
@@ -106,7 +99,7 @@ curl -X POST http://localhost:12312/anthropic/v1/messages \
 
 ```
 API-TEST/
-├── main.py                  # 主入口：Flask 服务器 + tkinter GUI（合并版，v2.0）
+├── main.py                  # 主入口：FastAPI 服务器 + NiceGUI Web 管理面板（v4.0）
 ├── mock_server.py           # 独立服务器模块（v1.0 遗留）
 ├── mock_server_gui.py       # 独立 GUI 模块（v1.0 遗留）
 ├── config.json              # [自动生] 持久化配置文件
@@ -115,7 +108,7 @@ API-TEST/
 ├── build.bat                # Windows 一键打包脚本
 ├── API-Mock-Server.spec     # PyInstaller 构建配置
 ├── dist/
-│   └── API-Mock-Server.exe  # 打包好的可执行文件
+│   └── API-Mock-Server.exe  # 打包好的可执行文件（~46MB）
 └── README.md                # 本文件
 ```
 
@@ -123,31 +116,30 @@ API-TEST/
 
 ```
 ┌─────────────────────────────────────────────────────┐
-│                   Windows GUI (tkinter)             │
-│  ┌──────────┐  ┌──────────┐  ┌──────────┐          │
-│  │ 接口信息  │  │ 日志列表  │  │ 配置面板  │          │
-│  └──────────┘  └──────────┘  └──────────┘          │
-│                        │                            │
-│                  Config（共享配置）                    │
-│                        │                            │
-├────────────────────────┼────────────────────────────┤
-│              Flask HTTP Server                       │
-│                        │                            │
-│     ┌──────────────────┼──────────────────┐         │
-│     │                  │                  │         │
-│  /openai/...      /anthropic/...      /logs         │
-│     │                  │                  │         │
-│     ▼                  ▼                  ▼         │
-│  记录日志 → 错误注入 → 延迟模拟 → 返回响应            │
+│              FastAPI + NiceGUI (同一端口)             │
+│                                                     │
+│  ┌─────────────────┐  ┌───────────────────────────┐ │
+│  │   API 路由       │  │  NiceGUI Web 管理界面      │ │
+│  │                 │  │  ┌──────┐ ┌──────┐ ┌────┐ │ │
+│  │ /openai/...     │  │  │仪表盘 │ │ 日志  │ │配置│ │ │
+│  │ /anthropic/...  │  │  └──────┘ └──────┘ └────┘ │ │
+│  │ /logs /stats    │  │                           │ │
+│  └────────┬────────┘  └───────────────────────────┘ │
+│           │                                         │
+│     记录日志 → 错误注入 → 延迟模拟 → 返回响应         │
 └─────────────────────────────────────────────────────┘
 ```
 
 **技术栈：**
-- **Web 框架**: Flask 3.x
-- **GUI 框架**: tkinter（Python 内置）
+- **Web 框架**: FastAPI（ASGI）
+- **UI 框架**: NiceGUI（基于 FastAPI + Quasar/Vue）
 - **打包工具**: PyInstaller 6.x
 - **运行环境**: Python 3.13+
-- **系统托盘**: pystray + Pillow
+
+**v4.0 变更：**
+- Flask → FastAPI（WSGI → ASGI）
+- tkinter/CustomTkinter 桌面窗口 → NiceGUI 浏览器管理界面
+- 支持 ECharts 图表、数据表格、多页面导航
 
 **v2.1 新增特性：**
 - 真实接口转发（Mock/转发模式 tab 切换，OpenAI/Anthropic 独立上游配置）
@@ -261,7 +253,7 @@ API-TEST/
 
 - **响应内容** — 修改后立即影响后续请求（无需重启）
 - **延迟/错误注入** — 修改后立即影响后续请求（无需重启）
-- **端口/API Key** — 需要点击"重启服务器"按钮生效
+- **端口** — 需要点击"保存"后重启服务生效
 
 ### 日志管理
 
@@ -297,7 +289,9 @@ limitations under the License.
 
 本项目依赖以下开源项目：
 
-- [Flask](https://flask.palletsprojects.com/) — 轻量级 Python Web 框架（BSD-3-Clause）
+- [FastAPI](https://fastapi.tiangolo.com/) — 现代 Python Web 框架（MIT）
+- [NiceGUI](https://nicegui.io/) — 基于 FastAPI + Quasar 的 Python Web UI（MIT）
+- [Uvicorn](https://www.uvicorn.org/) — ASGI 服务器（BSD-3-Clause）
 - [PyInstaller](https://pyinstaller.org/) — Python 应用打包工具（GPL-2.0，仅用于构建）
 
 ---
