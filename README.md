@@ -1,6 +1,6 @@
 # API Mock Server
 
-> 本地大模型接口模拟服务器 — 用于测试 API 中转平台的请求转发和伪装功能
+> 本地大模型接口模拟服务器 v2.0 — 用于测试 API 中转平台的请求转发和伪装功能
 
 ---
 
@@ -80,13 +80,22 @@ curl -X POST http://localhost:12312/anthropic/v1/messages \
 | 功能区域 | 说明 |
 |----------|------|
 | 接口信息面板 | 显示接口地址和 API Key，每行附带"复制"按钮 |
-| 请求日志列表 | 自动刷新（每2秒），显示时间、类型、模型、客户端IP、UA、路径 |
+| 请求日志列表 | 自动刷新（每2秒），显示时间、类型、模型、客户端IP、UA、路径、状态码 |
+| 日志搜索 | 支持按关键词搜索过滤日志，实时显示匹配数量 |
 | 请求详情 | 选中某条日志后，在下方展示完整的 Headers 和 Body |
-| 服务器配置 | 修改监听端口、API Key，点击"重启服务器"生效 |
+| 统计面板 | 显示总请求数、成功率、RPM、模型调用次数柱状图 |
+| 服务器配置 | 修改监听端口、API Key、最大日志数，点击"重启服务器"生效 |
+| API Key 验证 | 开关控制，开启后拒绝无 Key 或 Key 错误的请求（返回 401） |
+| 消息轮次响应 | 开启后根据 messages 数组长度返回对应轮次的拼接响应 |
+| 日志持久化 | 开启后自动将日志追加写入 `logs/YYYYMMDD.jsonl` 文件 |
 | 响应内容 | 编辑 OpenAI/Anthropic 的 thinking 和结论文本，点击"应用"生效 |
+| Token 配置 | 可自定义 prompt_tokens 和 completion_tokens 数值 |
 | 延迟模拟 | 设置 0~10 秒的响应延迟，模拟真实上游 API |
 | 错误注入 | 配置 0%~100% 的错误概率和状态码，测试中转平台的错误处理 |
+| 额外端口 | 支持添加多个额外监听端口，每个端口独立运行 |
 | 日志导出 | 支持导出为 JSON 或 CSV 文件 |
+| 主题切换 | 支持深色/浅色主题一键切换 |
+| 配置持久化 | 所有配置自动保存到 `config.json`，重启后自动恢复 |
 
 ---
 
@@ -96,9 +105,11 @@ curl -X POST http://localhost:12312/anthropic/v1/messages \
 
 ```
 API-TEST/
-├── main.py                  # 主入口：Flask 服务器 + tkinter GUI（合并版）
-├── mock_server.py           # 独立服务器模块（可单独使用）
-├── mock_server_gui.py       # 独立 GUI 模块
+├── main.py                  # 主入口：Flask 服务器 + tkinter GUI（合并版，v2.0）
+├── mock_server.py           # 独立服务器模块（v1.0 遗留）
+├── mock_server_gui.py       # 独立 GUI 模块（v1.0 遗留）
+├── config.json              # [自动生] 持久化配置文件
+├── logs/                    # [自动生成] 日志持久化目录
 ├── requirements.txt         # Python 依赖
 ├── build.bat                # Windows 一键打包脚本
 ├── API-Mock-Server.spec     # PyInstaller 构建配置
@@ -135,6 +146,17 @@ API-TEST/
 - **GUI 框架**: tkinter（Python 内置）
 - **打包工具**: PyInstaller 6.x
 - **运行环境**: Python 3.13+
+- **系统托盘**: pystray + Pillow
+
+**v2.0 新增特性：**
+- API Key 鉴权验证（支持 OpenAI/Anthropic 两种认证方式）
+- 日志搜索过滤、数量限制、持久化写入
+- 配置自动保存到 `config.json`
+- 响应 Token 数可自定义
+- 多消息对话轮次响应
+- 实时请求统计面板（含模型调用柱状图）
+- 深色/浅色主题切换
+- 多端口并发监听
 
 ---
 

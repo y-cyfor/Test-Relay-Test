@@ -1,0 +1,20 @@
+{
+  "port": 12312,
+  "extra_ports": [],
+  "api_key": "sk-test-123",
+  "enable_auth": false,
+  "max_logs": 1000,
+  "enable_log_persistence": false,
+  "enable_multi_turn": true,
+  "response_thinking": "这是Mock服务器模拟的thinking过程。首先分析用户的问题，然后逐步推理得出结论。整个过程展示了thinking功能的转发是否正常。",
+  "response_content": "这是一个Mock服务器返回的固定结论内容。你的API中转平台转发功能正常！",
+  "response_thinking_anthropic": "这是Mock服务器模拟的thinking过程。Anthropic的thinking块展示了模型的推理过程，用于验证thinking功能是否正常转发。",
+  "response_content_anthropic": "这是一个Mock服务器返回的固定结论内容。你的API中转平台转发功能正常！Anthropic接口测试通过。",
+  "prompt_tokens": 10,
+  "completion_tokens": 50,
+  "response_delay": 0.0,
+  "error_rate": 0,
+  "error_code": 500,
+  "error_message": "Internal Server Error",
+  "dark_mode": true
+}
