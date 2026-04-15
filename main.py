@@ -1,10 +1,10 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 """
-API Mock Server v2.1 - 本地大模型接口模拟服务器
+API Mock Server v2.2 - 本地大模型接口模拟服务器
 包含12项增强功能：API Key验证、日志搜索、日志限制、配置持久化、
 Token可配置、多消息支持、系统托盘、深色主题、统计面板、
-日志持久化、多端口并发、真实接口转发
+日志持久化、多端口并发、真实接口转发（分离OpenAI/Anthropic上游配置）
 """
 
 import os
@@ -41,13 +41,25 @@ def forward_request(api_type):
     api_type: 'openai' 或 'anthropic'
     返回: (status_code, headers_dict, body_bytes_or_str)
     """
-    base_url = Config.forward_base_url.rstrip('/')
     if api_type == 'openai':
+        base_url = Config.forward_openai_url.rstrip('/')
         path = '/v1/chat/completions'
+        api_key = Config.forward_openai_key
     else:
+        base_url = Config.forward_anthropic_url.rstrip('/')
         path = '/v1/messages'
+        api_key = Config.forward_anthropic_key
 
-    target_url = urljoin(base_url + '/', path)
+    if not base_url:
+        return 502, {}, json.dumps({
+            'error': {
+                'message': f'Forward failed: {api_type} upstream URL not configured',
+                'type': 'forward_error',
+                'code': 502
+            }
+        }).encode('utf-8')
+
+    target_url = base_url + path if base_url.endswith('/') else base_url + path
 
     # 构建转发请求
     body_data = request.get_data()
@@ -59,10 +71,10 @@ def forward_request(api_type):
         headers[key] = value
 
     # 确保上游认证
-    if api_type == 'openai' and Config.forward_api_key:
-        headers['Authorization'] = f'Bearer {Config.forward_api_key}'
-    elif api_type == 'anthropic' and Config.forward_api_key:
-        headers['x-api-key'] = Config.forward_api_key
+    if api_type == 'openai' and api_key:
+        headers['Authorization'] = f'Bearer {api_key}'
+    elif api_type == 'anthropic' and api_key:
+        headers['x-api-key'] = api_key
         if 'anthropic-version' not in headers:
             headers['anthropic-version'] = '2023-06-01'
 
@@ -116,8 +128,12 @@ class Config:
 
     # 真实转发配置
     forward_mode = False
-    forward_base_url = ""
-    forward_api_key = ""
+    # OpenAI 转发
+    forward_openai_url = ""
+    forward_openai_key = ""
+    # Anthropic 转发
+    forward_anthropic_url = ""
+    forward_anthropic_key = ""
 
     response_thinking = "这是Mock服务器模拟的thinking过程。首先分析用户的问题，然后逐步推理得出结论。整个过程展示了thinking功能的转发是否正常。"
     response_content = "这是一个Mock服务器返回的固定结论内容。你的API中转平台转发功能正常！"
@@ -145,8 +161,10 @@ class Config:
             'enable_log_persistence': cls.enable_log_persistence,
             'enable_multi_turn': cls.enable_multi_turn,
             'forward_mode': cls.forward_mode,
-            'forward_base_url': cls.forward_base_url,
-            'forward_api_key': cls.forward_api_key,
+            'forward_openai_url': cls.forward_openai_url,
+            'forward_openai_key': cls.forward_openai_key,
+            'forward_anthropic_url': cls.forward_anthropic_url,
+            'forward_anthropic_key': cls.forward_anthropic_key,
             'response_thinking': cls.response_thinking,
             'response_content': cls.response_content,
             'response_thinking_anthropic': cls.response_thinking_anthropic,
@@ -612,7 +630,7 @@ def run_server(port=12312):
 class MockServerGUI:
     def __init__(self, root):
         self.root = root
-        self.root.title("API Mock Server v2.0 - 本地接口模拟器")
+        self.root.title("API Mock Server v2.2 - 本地接口模拟器")
         self.root.geometry("1300x850")
         self.root.minsize(1000, 700)
 
@@ -667,7 +685,7 @@ class MockServerGUI:
         control_frame = ttk.Frame(self.left_frame)
         control_frame.pack(fill='x')
 
-        title_label = ttk.Label(control_frame, text="API Mock Server v2.0", font=('Microsoft YaHei', 14, 'bold'))
+        title_label = ttk.Label(control_frame, text="API Mock Server v2.2", font=('Microsoft YaHei', 14, 'bold'))
         title_label.pack(side='left')
 
         self.status_var = tk.StringVar(value="● 运行中")
@@ -926,29 +944,6 @@ class MockServerGUI:
 
         ttk.Button(server_frame, text="重启服务器", command=self.restart_server).pack(anchor='w', pady=(5, 0))
 
-        # ====== 真实转发配置 ======
-        forward_frame = ttk.LabelFrame(config_frame, text="真实接口转发", padding="8")
-        forward_frame.pack(fill='x', pady=(0, 10))
-
-        self.forward_var = tk.BooleanVar(value=Config.forward_mode)
-        ttk.Checkbutton(forward_frame, text="启用真实接口转发（关闭则使用内置Mock响应）",
-                        variable=self.forward_var).pack(anchor='w', pady=(0, 5))
-
-        ttk.Label(forward_frame, text="上游 Base URL:").pack(anchor='w')
-        self.forward_url_var = tk.StringVar(value=Config.forward_base_url)
-        url_entry = ttk.Entry(forward_frame, textvariable=self.forward_url_var, width=45, font=('Consolas', 9))
-        url_entry.pack(anchor='w', pady=(2, 5))
-        url_entry.insert(0, "例: https://api.openai.com 或 https://api.anthropic.com")
-
-        ttk.Label(forward_frame, text="上游 API Key:").pack(anchor='w')
-        self.forward_key_var = tk.StringVar(value=Config.forward_api_key)
-        ttk.Entry(forward_frame, textvariable=self.forward_key_var, width=45, font=('Consolas', 9), show='*').pack(anchor='w', pady=(2, 5))
-
-        ttk.Label(forward_frame, text="开启后请求将原封不动转发到上游，响应也原样返回",
-                  font=('Microsoft YaHei', 8), foreground='#888').pack(anchor='w')
-
-        ttk.Button(forward_frame, text="应用转发配置", command=self.apply_forward_config).pack(anchor='w', pady=(5, 0))
-
         # ====== 多端口配置 ======
         port_frame = ttk.LabelFrame(config_frame, text="额外端口", padding="8")
         port_frame.pack(fill='x', pady=(0, 10))
@@ -965,36 +960,40 @@ class MockServerGUI:
         for p in Config.extra_ports:
             self.extra_ports_listbox.insert(tk.END, str(p))
 
-        # ====== 响应内容 ======
-        response_frame = ttk.LabelFrame(config_frame, text="响应内容", padding="8")
-        response_frame.pack(fill='x', pady=(0, 10))
+        # ====== 响应模式 Notebook (tab切换) ======
+        mode_notebook = ttk.Notebook(config_frame)
+        mode_notebook.pack(fill='both', expand=True)
 
-        ttk.Label(response_frame, text="OpenAI Thinking:").pack(anchor='w')
-        self.thinking_var = tk.Text(response_frame, height=2, width=40, font=('Microsoft YaHei', 9))
+        # --- Tab 1: 自定义响应 ---
+        mock_tab = ttk.Frame(mode_notebook, padding="5")
+        mode_notebook.add(mock_tab, text="自定义响应")
+
+        ttk.Label(mock_tab, text="OpenAI Thinking:").pack(anchor='w')
+        self.thinking_var = tk.Text(mock_tab, height=2, width=40, font=('Microsoft YaHei', 9))
         self.thinking_var.pack(fill='x', pady=(2, 5))
         self.thinking_var.insert(tk.END, Config.response_thinking)
 
-        ttk.Label(response_frame, text="OpenAI 结论:").pack(anchor='w')
-        self.content_var = tk.Text(response_frame, height=2, width=40, font=('Microsoft YaHei', 9))
+        ttk.Label(mock_tab, text="OpenAI 结论:").pack(anchor='w')
+        self.content_var = tk.Text(mock_tab, height=2, width=40, font=('Microsoft YaHei', 9))
         self.content_var.pack(fill='x', pady=(2, 5))
         self.content_var.insert(tk.END, Config.response_content)
 
-        ttk.Separator(response_frame, orient='horizontal').pack(fill='x', pady=5)
+        ttk.Separator(mock_tab, orient='horizontal').pack(fill='x', pady=5)
 
-        ttk.Label(response_frame, text="Anthropic Thinking:").pack(anchor='w')
-        self.thinking_a_var = tk.Text(response_frame, height=2, width=40, font=('Microsoft YaHei', 9))
+        ttk.Label(mock_tab, text="Anthropic Thinking:").pack(anchor='w')
+        self.thinking_a_var = tk.Text(mock_tab, height=2, width=40, font=('Microsoft YaHei', 9))
         self.thinking_a_var.pack(fill='x', pady=(2, 5))
         self.thinking_a_var.insert(tk.END, Config.response_thinking_anthropic)
 
-        ttk.Label(response_frame, text="Anthropic 结论:").pack(anchor='w')
-        self.content_a_var = tk.Text(response_frame, height=2, width=40, font=('Microsoft YaHei', 9))
+        ttk.Label(mock_tab, text="Anthropic 结论:").pack(anchor='w')
+        self.content_a_var = tk.Text(mock_tab, height=2, width=40, font=('Microsoft YaHei', 9))
         self.content_a_var.pack(fill='x', pady=(2, 5))
         self.content_a_var.insert(tk.END, Config.response_content_anthropic)
 
-        ttk.Separator(response_frame, orient='horizontal').pack(fill='x', pady=5)
+        ttk.Separator(mock_tab, orient='horizontal').pack(fill='x', pady=5)
 
         # Token配置
-        token_row = ttk.Frame(response_frame)
+        token_row = ttk.Frame(mock_tab)
         token_row.pack(fill='x', pady=(0, 5))
         ttk.Label(token_row, text="Prompt Tokens:").pack(side='left')
         self.prompt_tokens_var = tk.IntVar(value=Config.prompt_tokens)
@@ -1003,18 +1002,18 @@ class MockServerGUI:
         self.completion_tokens_var = tk.IntVar(value=Config.completion_tokens)
         ttk.Spinbox(token_row, from_=1, to=10000, textvariable=self.completion_tokens_var, width=8, font=('Consolas', 9)).pack(side='left', padx=5)
 
-        ttk.Button(response_frame, text="应用响应内容", command=self.apply_response_config).pack(anchor='w')
+        ttk.Button(mock_tab, text="应用响应内容", command=self.apply_response_config).pack(anchor='w', pady=(5, 0))
 
-        # ====== 延迟模拟 ======
-        delay_frame = ttk.LabelFrame(config_frame, text="延迟模拟", padding="8")
-        delay_frame.pack(fill='x', pady=(0, 10))
+        # 延迟模拟
+        delay_frame = ttk.LabelFrame(mock_tab, text="延迟模拟", padding="8")
+        delay_frame.pack(fill='x', pady=(10, 10))
 
         ttk.Label(delay_frame, text="响应延迟 (秒):").pack(anchor='w')
         self.delay_var = tk.DoubleVar(value=Config.response_delay)
         ttk.Spinbox(delay_frame, from_=0, to=10, increment=0.1, textvariable=self.delay_var, width=12, font=('Consolas', 10)).pack(anchor='w', pady=(2, 5))
 
-        # ====== 错误注入 ======
-        error_frame = ttk.LabelFrame(config_frame, text="错误注入", padding="8")
+        # 错误注入
+        error_frame = ttk.LabelFrame(mock_tab, text="错误注入", padding="8")
         error_frame.pack(fill='x', pady=(0, 10))
 
         ttk.Label(error_frame, text="错误概率 (%):").pack(anchor='w')
@@ -1030,6 +1029,43 @@ class MockServerGUI:
         ttk.Entry(error_frame, textvariable=self.error_msg_var, width=35, font=('Consolas', 9)).pack(anchor='w', pady=(2, 5))
 
         ttk.Button(error_frame, text="应用延迟和错误配置", command=self.apply_error_config).pack(anchor='w', pady=(5, 0))
+
+        # --- Tab 2: 真实转发 ---
+        forward_tab = ttk.Frame(mode_notebook, padding="5")
+        mode_notebook.add(forward_tab, text="真实转发")
+
+        self.forward_var = tk.BooleanVar(value=Config.forward_mode)
+        ttk.Checkbutton(forward_tab, text="启用真实接口转发",
+                        variable=self.forward_var).pack(anchor='w', pady=(5, 10))
+
+        # OpenAI 转发
+        openai_fwd = ttk.LabelFrame(forward_tab, text="OpenAI 兼容接口转发", padding="8")
+        openai_fwd.pack(fill='x', pady=(0, 10))
+
+        ttk.Label(openai_fwd, text="Base URL:").pack(anchor='w')
+        self.forward_openai_url_var = tk.StringVar(value=Config.forward_openai_url)
+        ttk.Entry(openai_fwd, textvariable=self.forward_openai_url_var, width=45, font=('Consolas', 9)).pack(anchor='w', pady=(2, 5))
+
+        ttk.Label(openai_fwd, text="API Key:").pack(anchor='w')
+        self.forward_openai_key_var = tk.StringVar(value=Config.forward_openai_key)
+        ttk.Entry(openai_fwd, textvariable=self.forward_openai_key_var, width=45, font=('Consolas', 9), show='*').pack(anchor='w', pady=(2, 5))
+
+        # Anthropic 转发
+        anthropic_fwd = ttk.LabelFrame(forward_tab, text="Anthropic 兼容接口转发", padding="8")
+        anthropic_fwd.pack(fill='x', pady=(0, 10))
+
+        ttk.Label(anthropic_fwd, text="Base URL:").pack(anchor='w')
+        self.forward_anthropic_url_var = tk.StringVar(value=Config.forward_anthropic_url)
+        ttk.Entry(anthropic_fwd, textvariable=self.forward_anthropic_url_var, width=45, font=('Consolas', 9)).pack(anchor='w', pady=(2, 5))
+
+        ttk.Label(anthropic_fwd, text="API Key:").pack(anchor='w')
+        self.forward_anthropic_key_var = tk.StringVar(value=Config.forward_anthropic_key)
+        ttk.Entry(anthropic_fwd, textvariable=self.forward_anthropic_key_var, width=45, font=('Consolas', 9), show='*').pack(anchor='w', pady=(2, 5))
+
+        ttk.Label(forward_tab, text="说明: 开启后，OpenAI接口请求转发到OpenAI上游，Anthropic接口请求转发到Anthropic上游",
+                  font=('Microsoft YaHei', 8), foreground='#888', wraplength=350).pack(anchor='w', pady=(5, 10))
+
+        ttk.Button(forward_tab, text="应用转发配置", command=self.apply_forward_config).pack(anchor='w', pady=(5, 0))
 
     def toggle_theme(self):
         """切换主题"""
@@ -1094,8 +1130,10 @@ class MockServerGUI:
         Config.enable_log_persistence = self.log_persist_var.get()
         Config.max_logs = self.max_logs_var.get()
         Config.forward_mode = self.forward_var.get()
-        Config.forward_base_url = self.forward_url_var.get().strip()
-        Config.forward_api_key = self.forward_key_var.get().strip()
+        Config.forward_openai_url = self.forward_openai_url_var.get().strip()
+        Config.forward_openai_key = self.forward_openai_key_var.get().strip()
+        Config.forward_anthropic_url = self.forward_anthropic_url_var.get().strip()
+        Config.forward_anthropic_key = self.forward_anthropic_key_var.get().strip()
         save_config()
 
         self._update_curl_text()
@@ -1126,8 +1164,10 @@ class MockServerGUI:
 
     def apply_forward_config(self):
         Config.forward_mode = self.forward_var.get()
-        Config.forward_base_url = self.forward_url_var.get().strip()
-        Config.forward_api_key = self.forward_key_var.get().strip()
+        Config.forward_openai_url = self.forward_openai_url_var.get().strip()
+        Config.forward_openai_key = self.forward_openai_key_var.get().strip()
+        Config.forward_anthropic_url = self.forward_anthropic_url_var.get().strip()
+        Config.forward_anthropic_key = self.forward_anthropic_key_var.get().strip()
         save_config()
         mode_text = "转发模式" if Config.forward_mode else "Mock模式"
         messagebox.showinfo("成功", f"已切换到 {mode_text}")

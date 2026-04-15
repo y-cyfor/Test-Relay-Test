@@ -150,7 +150,7 @@ API-TEST/
 - **系统托盘**: pystray + Pillow
 
 **v2.1 新增特性：**
-- 真实接口转发（Mock/转发模式一键切换）
+- 真实接口转发（Mock/转发模式 tab 切换，OpenAI/Anthropic 独立上游配置）
 - 请求原样转发到上游 API，响应原样返回
 - 日志新增"模式"列区分 mock/forward
 
